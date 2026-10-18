@@ -1,0 +1,1591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>vulnfinder dashboard</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #161d2c;
+    --panel-2: #1b2334;
+    --line: #26304a;
+    --ink: #e6ebf5;
+    --muted: #93a0bd;
+    --accent: #4f8cff;
+    --critical: #ff4d6d;
+    --high: #ff8a3d;
+    --medium: #ffcc4d;
+    --low: #57b6ff;
+    --info: #8f9bb3;
+    --security: #ff6b81;
+    --bug: #ffb454;
+    --quality: #7ea6d8;
+    --safe: #4ecb8f;
+    --vuln: #ff4d6d;
+    --incon: #ffcc4d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 14px/1.5 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  }
+  a { color: var(--accent); }
+  header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 20px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #131a29, #0f1420);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: .3px; }
+  header .tag { color: var(--muted); font-size: 12px; }
+  header .spacer { flex: 1; }
+  .badge {
+    font-size: 11px; color: var(--muted); border: 1px solid var(--line);
+    padding: 2px 8px; border-radius: 999px;
+  }
+  nav.tabs { display: flex; gap: 4px; padding: 10px 16px 0; }
+  nav.tabs button {
+    background: transparent; color: var(--muted); border: 1px solid transparent;
+    border-bottom: none; padding: 8px 14px; border-radius: 8px 8px 0 0;
+    cursor: pointer; font-size: 13px;
+  }
+  nav.tabs button.active { color: var(--ink); background: var(--panel); border-color: var(--line); }
+  main { padding: 16px; max-width: 1180px; margin: 0 auto; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line);
+    color: var(--ink); border-radius: 7px; padding: 8px 9px; font: inherit;
+  }
+  textarea { resize: vertical; min-height: 68px; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 13px; }
+  .check input { width: auto; }
+  .row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .row > .grow { flex: 1; min-width: 220px; }
+  button.primary {
+    background: var(--accent); color: #07101f; border: none; font-weight: 600;
+    padding: 9px 16px; border-radius: 8px; cursor: pointer;
+  }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  button.ghost {
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--line);
+    padding: 8px 12px; border-radius: 8px; cursor: pointer; font: inherit;
+  }
+  button.ghost:hover { border-color: var(--accent); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .hidden { display: none !important; }
+
+  /* results */
+  .summary { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip {
+    border: 1px solid var(--line); background: var(--panel-2); border-radius: 999px;
+    padding: 4px 11px; font-size: 12px; cursor: pointer; user-select: none;
+    color: var(--ink); display: inline-flex; gap: 6px; align-items: center;
+  }
+  .chip.off { opacity: .38; }
+  .chip .n { font-variant-numeric: tabular-nums; color: var(--muted); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .s-critical { background: var(--critical); } .s-high { background: var(--high); }
+  .s-medium { background: var(--medium); } .s-low { background: var(--low); } .s-info { background: var(--info); }
+  .k-security { background: var(--security); } .k-bug { background: var(--bug); } .k-quality { background: var(--quality); }
+
+  .finding { border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; background: var(--panel-2); }
+  .finding.sev-critical { border-left-color: var(--critical); }
+  .finding.sev-high { border-left-color: var(--high); }
+  .finding.sev-medium { border-left-color: var(--medium); }
+  .finding.sev-low { border-left-color: var(--low); }
+  .finding.sev-info { border-left-color: var(--info); }
+  .fhead { display: flex; gap: 9px; align-items: baseline; flex-wrap: wrap; }
+  .sevtag { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
+  .kindtag { font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; border-radius: 4px; padding: 1px 6px; color: #0b1020; font-weight: 700; }
+  .fhead .title { font-weight: 600; }
+  .fhead .where { color: var(--muted); font-family: ui-monospace, Consolas, monospace; font-size: 12px; margin-left: auto; }
+  .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  code.ev, pre.ev {
+    display: block; background: #0c111c; border: 1px solid var(--line); border-radius: 6px;
+    padding: 7px 9px; margin: 8px 0 0; font-family: ui-monospace, Consolas, monospace;
+    font-size: 12.5px; color: #cdd7ee; white-space: pre-wrap; word-break: break-word;
+  }
+  .why { margin: 8px 0 0; }
+  .fix { margin: 6px 0 0; color: #cfe6d8; }
+  .fix b { color: var(--muted); font-weight: 600; }
+
+  table.probes { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.probes th, table.probes td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.probes th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .verdict { font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: .5px; }
+  .v-vulnerable { color: var(--vuln); } .v-safe { color: var(--safe); }
+  .v-inconclusive { color: var(--incon); } .v-skipped { color: var(--muted); } .v-error { color: var(--high); }
+
+  .errors { border: 1px solid var(--high); background: #2a1a12; border-radius: 8px; padding: 10px 12px; }
+  .errors ul { margin: 6px 0 0; padding-left: 18px; }
+  .empty { color: var(--muted); padding: 14px 0; }
+
+  /* modal folder picker */
+  .modal { position: fixed; inset: 0; background: rgba(5,8,15,.72); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .modal .box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; width: min(680px, 92vw); max-height: 80vh; display: flex; flex-direction: column; }
+  .modal .box header { position: static; border-radius: 12px 12px 0 0; }
+  .modal .box .body { padding: 14px; overflow: auto; }
+  .crumbs { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; color: var(--muted); word-break: break-all; }
+  .dirlink { display: block; padding: 6px 9px; border-radius: 6px; cursor: pointer; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  .dirlink:hover { background: var(--panel-2); }
+  .modal footer { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 14px; border-top: 1px solid var(--line); }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line); padding: 9px 16px; border-radius: 8px; z-index: 200; }
+  .spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.25); border-top-color: #fff; border-radius: 50%; display: inline-block; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (max-width: 640px) { .fhead .where { margin-left: 0; width: 100%; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>vulnfinder</h1>
+  <span class="tag">code audit &middot; LLM probing &middot; deps &middot; fuzz &middot; autofix &middot; ollama</span>
+  <span class="spacer"></span>
+  <span class="badge" id="modeBadge">local</span>
+  <span class="badge">no model required</span>
+</header>
+
+<nav class="tabs">
+  <button data-tab="audit" class="active">Audit</button>
+  <button data-tab="probe">Probe</button>
+  <button data-tab="all">Audit + Probe</button>
+  <button data-tab="deps">Deps</button>
+  <button data-tab="quality">Quality</button>
+  <button data-tab="fuzz">Fuzz</button>
+  <button data-tab="fix">Fix</button>
+  <button data-tab="ollama">Ollama</button>
+  <button data-tab="runner">Bounty Run</button>
+  <button data-tab="scanners">Scan tools</button>
+  <button data-tab="bounties">Bounties</button>
+  <button data-tab="rules">Rules</button>
+</nav>
+
+<main>
+  <!-- ============ AUDIT ============ -->
+  <section id="tab-audit">
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <label for="auditPath">Path to a file or folder</label>
+          <input type="text" id="auditPath" value="." spellcheck="false" />
+        </div>
+        <button class="ghost" id="browseBtn">Browse&hellip;</button>
+        <button class="primary" id="runAudit">Run audit</button>
+      </div>
+      <div class="grid" style="margin-top:12px">
+        <div>
+          <label for="auditInclude">Only these globs (optional)</label>
+          <input type="text" id="auditInclude" placeholder="*.py, *.js" spellcheck="false" />
+        </div>
+        <div>
+          <label for="auditMaxFiles">Max files</label>
+          <input type="number" id="auditMaxFiles" value="500" min="1" />
+        </div>
+        <div>
+          <label>Options</label>
+          <div class="check"><input type="checkbox" id="auditLlm" /> <span>Add the optional LLM pass</span></div>
+        </div>
+      </div>
+      <div class="hint">The LLM pass needs a local backend (Ollama by default) and is off by default &mdash; everything else works with no model.</div>
+    </div>
+  </section>
+
+  <!-- ============ PROBE ============ -->
+  <section id="tab-probe" class="hidden">
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label for="probeTarget">Target</label>
+          <select id="probeTarget">
+            <option value="http">HTTP endpoint (a deployed app)</option>
+            <option value="model">Local model (via aibot backends)</option>
+          </select>
+        </div>
+        <div id="probeCategoryWrap">
+          <label for="probeCategory">Category (optional)</label>
+          <input type="text" id="probeCategory" placeholder="prompt-injection" spellcheck="false" />
+        </div>
+        <div>
+          <label for="probeCanary">Canary token (optional)</label>
+          <input type="text" id="probeCanary" placeholder="random" spellcheck="false" />
+        </div>
+      </div>
+
+      <!-- http target fields -->
+      <div id="httpFields">
+        <div class="row" style="margin-top:12px">
+          <div class="grow">
+            <label for="httpUrl">Endpoint URL</label>
+            <input type="text" id="httpUrl" placeholder="http://127.0.0.1:8788/chat" spellcheck="false" />
+          </div>
+        </div>
+        <div class="grid" style="margin-top:12px">
+          <div>
+            <label for="httpTemplate">JSON body template</label>
+            <textarea id="httpTemplate">{"prompt": "{prompt}", "system": "{system}"}</textarea>
+          </div>
+          <div>
+            <label for="httpField">Reply field (dotted path)</label>
+            <input type="text" id="httpField" value="response" spellcheck="false" />
+          </div>
+          <div>
+            <label for="httpHeader">Extra headers (one K:V per line)</label>
+            <textarea id="httpHeader" placeholder="Authorization: Bearer ..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- model target fields -->
+      <div id="modelFields" class="hidden">
+        <div class="grid" style="margin-top:12px">
+          <div>
+            <label for="mBackend">Backend</label>
+            <select id="mBackend">
+              <option>ollama</option><option>openai</option><option>llamacpp</option>
+              <option>vllm</option><option>lmstudio</option>
+            </select>
+          </div>
+          <div>
+            <label for="mModel">Model</label>
+            <input type="text" id="mModel" placeholder="qwen2.5:0.5b" spellcheck="false" />
+          </div>
+          <div>
+            <label for="mHost">Ollama host</label>
+            <input type="text" id="mHost" value="http://127.0.0.1:11434" spellcheck="false" />
+          </div>
+          <div>
+            <label for="mBaseUrl">OpenAI-compatible base URL</label>
+            <input type="text" id="mBaseUrl" value="http://127.0.0.1:8080/v1" spellcheck="false" />
+          </div>
+          <div>
+            <label for="mTimeout">Timeout (s)</label>
+            <input type="number" id="mTimeout" value="120" min="1" />
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <label for="probeSystem">System prompt (optional &mdash; improves detection)</label>
+        <textarea id="probeSystem" placeholder="Paste the target's real system prompt if you know it."></textarea>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="grow">
+          <label for="probeOnly">Only these payload ids (optional)</label>
+          <input type="text" id="probeOnly" placeholder="inj/ignore-instructions, exfil/environment" spellcheck="false" />
+        </div>
+        <button class="primary" id="runProbe">Run probe</button>
+      </div>
+      <div class="hint">Only probe apps you own or are authorized to test. Requests go only to the target you enter here.</div>
+    </div>
+  </section>
+
+  <!-- ============ ALL ============ -->
+  <section id="tab-all" class="hidden">
+    <div class="card">
+      <p style="margin-top:0">Runs an audit and a probe, then merges both into one report.</p>
+      <div class="row">
+        <div class="grow">
+          <label for="allPath">Path to a file or folder</label>
+          <input type="text" id="allPath" value="." spellcheck="false" />
+        </div>
+        <div class="grow">
+          <label for="allUrl">Probe endpoint URL</label>
+          <input type="text" id="allUrl" placeholder="http://127.0.0.1:8788/chat" spellcheck="false" />
+        </div>
+        <button class="primary" id="runAll">Run both</button>
+      </div>
+      <div class="hint">Uses the HTTP settings from the Probe tab (template, reply field, headers).</div>
+    </div>
+  </section>
+
+  <!-- ============ DEPS (SCA) ============ -->
+  <section id="tab-deps" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <label for="depsPath">Folder or manifest file</label>
+          <input type="text" id="depsPath" value="." spellcheck="false" />
+        </div>
+        <button class="ghost" id="depsBrowse">Browse&hellip;</button>
+        <label class="check" style="margin-bottom:9px"><input type="checkbox" id="depsOffline" /> offline (cache only)</label>
+        <button class="primary" id="runDeps">Scan dependencies</button>
+      </div>
+      <div class="hint">The local Black-Duck/Snyk equivalent: reads requirements.txt, Pipfile.lock, package-lock.json, Cargo.lock, go.mod, pom.xml, Gemfile.lock, composer.lock, *.csproj&hellip; and checks the pinned versions against the free OSV advisory database. This is the only scan that uses the network (results are cached).</div>
+    </div>
+  </section>
+
+  <!-- ============ QUALITY ============ -->
+  <section id="tab-quality" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <label for="qualityPath">File or folder</label>
+          <input type="text" id="qualityPath" value="." spellcheck="false" />
+        </div>
+        <button class="primary" id="runQuality">Measure quality</button>
+      </div>
+      <div class="hint">The local SonarQube-style pass: complexity, long functions, deep nesting, too many parameters, oversized files, duplicated code. Python is measured exactly; other languages use a brace-tracking approximation.</div>
+    </div>
+  </section>
+
+  <!-- ============ FUZZ ============ -->
+  <section id="tab-fuzz" class="hidden">
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label for="fuzzMode">Target</label>
+          <select id="fuzzMode">
+            <option value="http">HTTP endpoint</option>
+            <option value="process">Local process</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="fuzzHttpFields">
+        <div class="row" style="margin-top:12px">
+          <div class="grow">
+            <label for="fuzzUrl">Endpoint URL</label>
+            <input type="text" id="fuzzUrl" placeholder="http://127.0.0.1:8788/api" spellcheck="false" />
+          </div>
+          <div>
+            <label for="fuzzMethod">Method</label>
+            <select id="fuzzMethod"><option>POST</option><option>GET</option><option>PUT</option><option>PATCH</option></select>
+          </div>
+        </div>
+        <div class="grid" style="margin-top:12px">
+          <div>
+            <label for="fuzzTemplate">Body template with {fuzz}</label>
+            <input type="text" id="fuzzTemplate" value='{"fuzz": "{fuzz}"}' spellcheck="false" />
+          </div>
+          <div>
+            <label for="fuzzIter">Iterations</label>
+            <input type="number" id="fuzzHttpIter" value="60" min="1" />
+          </div>
+          <div>
+            <label for="fuzzHeader">Extra headers (one K:V per line)</label>
+            <textarea id="fuzzHeader" placeholder="Authorization: Bearer ..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div id="fuzzProcFields" class="hidden">
+        <div class="row" style="margin-top:12px">
+          <div class="grow">
+            <label for="fuzzCommand">Command to fuzz (use {fuzz} to place the input as an argument)</label>
+            <input type="text" id="fuzzCommand" placeholder='python C:\path\script.py' spellcheck="false" />
+          </div>
+          <div>
+            <label for="fuzzCMode">Feed input</label>
+            <select id="fuzzCMode"><option value="stdin">on stdin</option><option value="arg">as an argument</option></select>
+          </div>
+          <div>
+            <label for="fuzzProcIter">Iterations</label>
+            <input type="number" id="fuzzProcIter" value="120" min="1" />
+          </div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <div class="grow">
+          <label for="fuzzCwd">Working directory (local process)</label>
+          <input type="text" id="fuzzCwd" value="" placeholder="leave empty for the dashboard folder" spellcheck="false" />
+        </div>
+        <button class="primary" id="runFuzz">Run fuzzer</button>
+      </div>
+      <div class="hint">Only fuzz systems you own or are authorised to test. HTTP fuzzing sends real requests to the URL you enter.</div>
+    </div>
+  </section>
+
+  <!-- ============ FIX ============ -->
+  <section id="tab-fix" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <label for="fixPath">File or folder</label>
+          <input type="text" id="fixPath" value="." spellcheck="false" />
+        </div>
+        <label class="check" style="margin-bottom:9px"><input type="checkbox" id="fixAggressive" /> aggressive (rewrite weak hashes, old Solidity builtins)</label>
+        <label class="check" style="margin-bottom:9px"><input type="checkbox" id="fixApply" /> apply changes (backed up to .vbak)</label>
+        <button class="primary" id="runFix">Run patch loop</button>
+      </div>
+      <div class="hint">Auto-fix only the rules with provably safe fixes, then re-scan until the loop is stable. Dry run by default &mdash; you see the exact diff first.</div>
+    </div>
+  </section>
+
+  <!-- ============ OLLAMA (local models) ============ -->
+  <section id="tab-ollama" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div>
+          <label for="ollBackend">Backend</label>
+          <select id="ollBackend">
+            <option>ollama</option><option>openai</option><option>llamacpp</option>
+            <option>vllm</option><option>lmstudio</option>
+          </select>
+        </div>
+        <div class="grow">
+          <label for="ollHost">Ollama host</label>
+          <input type="text" id="ollHost" value="http://127.0.0.1:11434" spellcheck="false" />
+        </div>
+        <div class="grow">
+          <label for="ollBaseUrl">OpenAI-compatible base URL</label>
+          <input type="text" id="ollBaseUrl" value="http://127.0.0.1:8080/v1" spellcheck="false" />
+        </div>
+        <button class="ghost" id="ollDetect">Detect models</button>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="grow">
+          <label for="ollModel">Model</label>
+          <select id="ollModel"><option value="">(detect models first)</option></select>
+        </div>
+        <div>
+          <label for="ollTimeout">Timeout (s)</label>
+          <input type="number" id="ollTimeout" value="120" min="5" style="width:96px" />
+        </div>
+        <button class="ghost" id="ollTest">Test model</button>
+      </div>
+      <div class="hint" id="ollStatus">Point this at your local Ollama (or any OpenAI-compatible server) and pick a model. Abliterated / refusal-ablated models you have pulled are flagged automatically.</div>
+    </div>
+
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label for="ollSystem">System prompt (optional)</label>
+          <textarea id="ollSystem" placeholder="You are a security engineer helping with an authorised audit..."></textarea>
+        </div>
+        <div>
+          <label for="ollPrompt">Prompt</label>
+          <textarea id="ollPrompt" placeholder="Ask the selected model anything."></textarea>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="ollSend">Send to model</button>
+        <div class="hint" style="margin:0">Runs your prompt against the selected local model and shows the raw reply. Nothing leaves this machine.</div>
+      </div>
+      <div id="ollReplyWrap" class="hidden" style="margin-top:12px">
+        <div class="meta" id="ollReplyMeta"></div>
+        <pre class="ev" id="ollReply" style="max-height:420px;overflow:auto"></pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <p style="margin-top:0">Put the selected model to work.</p>
+      <div class="row">
+        <div class="grow">
+          <label for="ollPath">Path for AI code review</label>
+          <input type="text" id="ollPath" value="." spellcheck="false" />
+        </div>
+        <button class="primary" id="ollReview">AI code review</button>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="grow">
+          <label for="ollCategory">Red-team category (optional)</label>
+          <input type="text" id="ollCategory" placeholder="prompt-injection, jailbreak, sensitive-disclosure&hellip;" spellcheck="false" />
+        </div>
+        <div class="grow">
+          <label for="ollSysPrompt">System prompt the probed model should have (optional)</label>
+          <input type="text" id="ollSysPrompt" placeholder="Paste the target's system prompt to make leak detection work" spellcheck="false" />
+        </div>
+        <button class="primary" id="ollProbe">Red-team this model</button>
+      </div>
+      <div class="hint">AI code review runs the model's semantic audit over your code (slow, low-confidence findings, merged with the rules engine). Red-team sends the OWASP payload corpus at the selected model to test its own guardrails &mdash; a common use for abliterated models. It makes one model call per payload, so it can take a while on a small model: set a category above to run just a few, and raise the timeout if replies are being cut off.</div>
+    </div>
+  </section>
+
+  <!-- ============ BOUNTY RUN (agents) ============ -->
+  <section id="tab-runner" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <label for="runPath">Workspace folder</label>
+          <input type="text" id="runPath" value="bounties/ssv-network" spellcheck="false" />
+        </div>
+        <div class="grow">
+          <label for="runSrc">Source override (optional)</label>
+          <input type="text" id="runSrc" placeholder="path to cloned source, e.g. ...&bsol;contracts" spellcheck="false" />
+        </div>
+        <div>
+          <label for="runOut">Workspace root</label>
+          <input type="text" id="runOut" value="bounties" spellcheck="false" style="width:130px" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="grow">
+          <label for="runSlug">Immunefi slug (optional &mdash; fetches the program instead of using a folder)</label>
+          <input type="text" id="runSlug" placeholder="ssv-network" spellcheck="false" />
+        </div>
+        <label class="check" style="margin-bottom:9px"><input type="checkbox" id="runClone" /> clone in-scope repos</label>
+        <label class="check" style="margin-bottom:9px"><input type="checkbox" id="runOnline" /> let SCA reach OSV</label>
+        <button class="ghost" id="runPick">Choose folder</button>
+        <button class="ghost" id="runResearch">Research dossier</button>
+        <button class="primary" id="runGo">Run agents</button>
+      </div>
+      <div class="hint">Assigns the pipeline agents in order &mdash; recon &rarr; static analysis &rarr; SCA &rarr; quality &rarr; (optional) fuzz/probe &rarr; triage &rarr; eligibility vs the program&rsquo;s own known issues &rarr; report. Each agent records its status, detail and timing. The run ends with an explicit verdict you can hand in <i>only</i> after the listed human steps: a machine can finish triage, but it cannot confirm novelty, write a PoC, pass KYC or disclose on your behalf.</div>
+    </div>
+
+    <div class="card" id="runGateWrap"><div class="empty">No run yet. Pick a workspace folder (or an Immunefi slug) and click &ldquo;Run agents&rdquo;.</div></div>
+
+    <div class="card" id="runBoardWrap"><div class="empty">The agent task board appears here.</div></div>
+
+    <div class="card" id="runFindingsWrap"></div>
+
+    <div class="card" id="runResearchWrap"><div class="empty">The manual research dossier appears here &mdash; a reasoning-driven review of the in-scope source, with an explicit verdict and every excluded candidate. Use &ldquo;Research dossier&rdquo; after a run, or load a saved workspace.</div></div>
+
+    <div class="card" id="runListWrap"><div class="empty">Saved workspaces appear here once they have been run.</div></div>
+  </section>
+
+  <!-- ============ SCANNERS ============ -->
+  <section id="tab-scanners" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <label for="scanPath">Solidity source tree</label>
+          <input type="text" id="scanPath" value="bounties/ssv-network/src" spellcheck="false" />
+        </div>
+        <div>
+          <label for="scanTimeout">Timeout (s)</label>
+          <input type="number" id="scanTimeout" value="900" style="width:95px" />
+        </div>
+        <button class="ghost" id="scanRegistry">Refresh registry</button>
+        <button class="primary" id="scanAll">Run installed scanners</button>
+      </div>
+        <div class="hint">Each tool is probed live on this machine. <b>real</b> = open-source and runnable; <b>saas</b> = hosted, needs an account/token; <b>blocked</b> = exists but not runnable in this environment; <b>unverified</b> = no such Solidity scanner found, so nothing can run. A detector hit is raw tool output &mdash; it is <i>not</i> a validated or submittable vulnerability. Anything hosted (e.g. SolidityScan) also needs a token: set <code>SOLIDITYSCAN_TOKEN</code> or write <code>~/solidityscan.yml</code>.</div>
+    </div>
+
+    <div class="card" id="scanTableWrap"><div class="empty">Loading the scanner registry&hellip;</div></div>
+
+    <div class="card" id="scanResultWrap"><div class="empty">Pick a source tree and run the scanners. Slither needs the project's dependencies present; otherwise it reports a compile error rather than clean code.</div></div>
+  </section>
+
+  <!-- ============ BOUNTIES ============ -->
+  <section id="tab-bounties" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <label for="btySearch">Search programs</label>
+          <input type="text" id="btySearch" placeholder="layerzero, dex, bridge&hellip;" spellcheck="false" />
+        </div>
+        <div>
+          <label for="btyMin">Min bounty (USD)</label>
+          <input type="number" id="btyMin" value="0" min="0" step="10000" />
+        </div>
+        <div>
+          <label for="btySort">Sort</label>
+          <select id="btySort">
+            <option value="bounty">Largest bounty</option>
+            <option value="updated">Recently updated</option>
+            <option value="name">Name</option>
+          </select>
+        </div>
+        <label class="check" style="margin-bottom:9px"><input type="checkbox" id="btyAuditable" /> auditable source only</label>
+        <button class="primary" id="btyLoad">Load programs</button>
+      </div>
+      <div class="hint">Live from Immunefi's public program feed (cached on disk). Read the rules of engagement before you test anything.</div>
+    </div>
+    <div class="card" id="btyListWrap"><div class="empty">Set filters and click &ldquo;Load programs&rdquo;.</div></div>
+    <div id="btyDetail"></div>
+  </section>
+
+  <!-- ============ RULES ============ -->
+  <section id="tab-rules" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <label for="ruleSearch">Filter rules</label>
+          <input type="text" id="ruleSearch" placeholder="sanity, injection, bug&hellip;" spellcheck="false" />
+        </div>
+        <div id="ruleKindChips" class="summary"></div>
+      </div>
+    </div>
+    <div class="card" id="rulesTableWrap"><div class="empty">Loading rules&hellip;</div></div>
+  </section>
+
+  <!-- ============ RESULTS ============ -->
+  <section id="results" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div class="grow"><div class="summary" id="summary"></div></div>
+        <button class="ghost" id="dlJson">Download JSON</button>
+        <button class="ghost" id="dlMd">Download Markdown</button>
+        <button class="ghost" id="copyText">Copy text report</button>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="grow">
+          <input type="text" id="search" placeholder="Search findings (title, path, evidence)&hellip;" spellcheck="false" />
+        </div>
+        <div id="kindChips" class="summary"></div>
+      </div>
+      <div class="hint">Click a severity or kind chip to filter. &ldquo;Worst severity&rdquo; is the highest ranked finding.</div>
+    </div>
+
+    <div id="errors" class="hidden"></div>
+    <div id="findings"></div>
+    <div id="probesWrap"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => (
+  { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const SEW = ["critical", "high", "medium", "low", "info"];
+const KINDS = ["security", "bug", "quality"];
+
+const state = {
+  report: null, markdown: "", text: "",
+  stats: null, diff: "",
+  sevOff: new Set(), kindOff: new Set(), q: "",
+  rules: [], ruleKindOff: new Set(),
+  bounties: [], bountySlug: "",
+  modelsLoaded: false,
+  runsLoaded: false,
+  scannersLoaded: false,
+};
+
+async function api(path, payload) {
+  const res = await fetch(path, {
+    method: payload === undefined ? "GET" : "POST",
+    headers: payload === undefined ? {} : { "Content-Type": "application/json", "X-Requested-With": "vulnfinder" },
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+function toast(msg) {
+  const el = document.createElement("div");
+  el.className = "toast"; el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+/* ---------- tabs ---------- */
+const TABS = ["audit", "probe", "all", "deps", "quality", "fuzz", "fix", "ollama", "runner", "scanners", "bounties", "rules"];
+document.querySelectorAll("nav.tabs button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b === btn));
+    TABS.forEach(t => $("tab-" + t).classList.toggle("hidden", t !== btn.dataset.tab));
+    if (btn.dataset.tab === "rules") loadRules();
+    if (btn.dataset.tab === "bounties" && !bountiesLoaded) loadBounties(false);
+    if (btn.dataset.tab === "runner" && !state.runsLoaded) loadRuns();
+    if (btn.dataset.tab === "scanners") loadScanners();
+    if (btn.dataset.tab === "ollama" && !state.modelsLoaded) detectModels();
+  });
+});
+
+/* ---------- probe target toggles ---------- */
+$("probeTarget").addEventListener("change", (e) => {
+  const http = e.target.value === "http";
+  $("httpFields").classList.toggle("hidden", !http);
+  $("modelFields").classList.toggle("hidden", http);
+});
+
+/* ---------- fuzz target toggles ---------- */
+$("fuzzMode").addEventListener("change", (e) => {
+  const http = e.target.value === "http";
+  $("fuzzHttpFields").classList.toggle("hidden", !http);
+  $("fuzzProcFields").classList.toggle("hidden", http);
+});
+
+/* ---------- run buttons ---------- */
+function busy(btn, on) {
+  btn.disabled = on;
+  if (on) { btn.dataset.label = btn.textContent; btn.innerHTML = '<span class="spinner"></span> working…'; }
+  else if (btn.dataset.label) { btn.textContent = btn.dataset.label; }
+}
+
+function commonProbePayload() {
+  const t = $("probeTarget").value;
+  const p = {
+    target: t,
+    system_prompt: $("probeSystem").value,
+    category: $("probeCategory").value,
+    canary: $("probeCanary").value,
+    only: $("probeOnly").value,
+    timeout: Number($("mTimeout").value || 120),
+  };
+  if (t === "http") {
+    p.http_url = $("httpUrl").value;
+    p.http_template = $("httpTemplate").value;
+    p.http_field = $("httpField").value;
+    p.http_header = $("httpHeader").value;
+    p.http_timeout = Number($("mTimeout").value || 60);
+  } else {
+    p.backend = $("mBackend").value;
+    p.model = $("mModel").value;
+    p.host = $("mHost").value;
+    p.base_url = $("mBaseUrl").value;
+  }
+  return p;
+}
+
+$("runAudit").addEventListener("click", async () => {
+  const btn = $("runAudit"); busy(btn, true);
+  try {
+    const payload = {
+      path: $("auditPath").value,
+      include: $("auditInclude").value,
+      max_files: Number($("auditMaxFiles").value || 500),
+      llm: $("auditLlm").checked,
+    };
+    handle(await api("/api/audit", payload));
+  } catch (e) { toast("request failed: " + e.message); }
+  finally { busy(btn, false); }
+});
+
+$("runProbe").addEventListener("click", async () => {
+  const btn = $("runProbe"); busy(btn, true);
+  try { handle(await api("/api/probe", commonProbePayload())); }
+  catch (e) { toast("request failed: " + e.message); }
+  finally { busy(btn, false); }
+});
+
+$("runAll").addEventListener("click", async () => {
+  const btn = $("runAll"); busy(btn, true);
+  try {
+    const payload = commonProbePayload();
+    payload.path = $("allPath").value;
+    payload.http_url = $("allUrl").value || payload.http_url;
+    payload.target = "http";
+    handle(await api("/api/all", payload));
+  } catch (e) { toast("request failed: " + e.message); }
+  finally { busy(btn, false); }
+});
+
+$("runDeps").addEventListener("click", async () => {
+  const btn = $("runDeps"); busy(btn, true);
+  try {
+    handle(await api("/api/deps", {
+      path: $("depsPath").value,
+      offline: $("depsOffline").checked,
+      max_packages: 800,
+    }));
+  } catch (e) { toast("request failed: " + e.message); }
+  finally { busy(btn, false); }
+});
+
+$("runQuality").addEventListener("click", async () => {
+  const btn = $("runQuality"); busy(btn, true);
+  try { handle(await api("/api/quality", { path: $("qualityPath").value, max_files: 500 })); }
+  catch (e) { toast("request failed: " + e.message); }
+  finally { busy(btn, false); }
+});
+
+$("runFuzz").addEventListener("click", async () => {
+  const btn = $("runFuzz"); busy(btn, true);
+  try {
+    const payload = { mode: $("fuzzMode").value, header: $("fuzzHeader").value, cwd: $("fuzzCwd").value };
+    if (payload.mode === "http") {
+      payload.url = $("fuzzUrl").value;
+      payload.method = $("fuzzMethod").value;
+      payload.template = $("fuzzTemplate").value;
+      payload.iterations = Number($("fuzzHttpIter").value || 60);
+    } else {
+      payload.command = $("fuzzCommand").value;
+      payload.cmode = $("fuzzCMode").value;
+      payload.iterations = Number($("fuzzProcIter").value || 120);
+    }
+    handle(await api("/api/fuzz", payload));
+  } catch (e) { toast("request failed: " + e.message); }
+  finally { busy(btn, false); }
+});
+
+$("runFix").addEventListener("click", async () => {
+  const btn = $("runFix"); busy(btn, true);
+  try {
+    handleFix(await api("/api/fix", {
+      path: $("fixPath").value,
+      aggressive: $("fixAggressive").checked,
+      apply: $("fixApply").checked,
+      max_passes: 3,
+    }));
+  } catch (e) { toast("request failed: " + e.message); }
+  finally { busy(btn, false); }
+});
+
+/* ---------- ollama (local models) ---------- */
+function ollamaPayload() {
+  return {
+    backend: $("ollBackend").value,
+    model: $("ollModel").value,
+    host: $("ollHost").value,
+    base_url: $("ollBaseUrl").value,
+    timeout: Number($("ollTimeout").value || 120),
+  };
+}
+
+async function detectModels() {
+  const btn = $("ollDetect");
+  busy(btn, true);
+  $("ollStatus").textContent = "detecting\u2026";
+  try {
+    const q = new URLSearchParams({
+      backend: $("ollBackend").value,
+      host: $("ollHost").value,
+      base_url: $("ollBaseUrl").value,
+    });
+    const res = await fetch("/api/models?" + q.toString()).then(r => r.json());
+    const sel = $("ollModel");
+    if (!res.ok) {
+      sel.innerHTML = '<option value="">(none detected)</option>';
+      $("ollStatus").innerHTML = "detect failed: <b>" + esc(res.error || "unknown error") + "</b>";
+      return;
+    }
+    sel.innerHTML = "";
+    for (const name of res.models) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = /abliterat/i.test(name) ? name + "   \u2014 abliterated" : name;
+      sel.appendChild(opt);
+    }
+    if (!res.models.length) sel.innerHTML = '<option value="">(no models pulled)</option>';
+    const abl = res.models.find(m => /abliterat/i.test(m));
+    if (abl) sel.value = abl;
+    state.modelsLoaded = true;
+    const where = res.backend === "ollama" ? res.host : res.base_url;
+    const flagged = res.models.filter(m => /abliterat/i.test(m)).length;
+    $("ollStatus").innerHTML =
+      "connected: <b>" + res.models.length + "</b> model(s) at " + esc(where) +
+      (flagged ? " \u00b7 <b>" + flagged + "</b> abliterated" : "") +
+      (abl ? " \u00b7 defaulting to " + esc(abl) : "");
+  } catch (e) {
+    $("ollStatus").innerHTML = "detect failed: <b>" + esc(e.message) + "</b>";
+  } finally {
+    busy(btn, false);
+  }
+}
+
+async function sendToModel(prompt) {
+  const btn = $("ollSend");
+  busy(btn, true);
+  $("ollReplyWrap").classList.remove("hidden");
+  $("ollReplyMeta").textContent = "waiting for the model\u2026";
+  $("ollReply").textContent = "";
+  try {
+    const res = await api("/api/chat", {
+      ...ollamaPayload(),
+      system: $("ollSystem").value,
+      prompt: prompt !== undefined ? prompt : $("ollPrompt").value,
+    });
+    if (!res.ok) {
+      $("ollReplyMeta").textContent = "";
+      $("ollReply").textContent = "(error) " + (res.error || "request failed");
+      return;
+    }
+    $("ollReplyMeta").textContent =
+      res.model + " \u00b7 " + res.elapsed_ms + " ms \u00b7 " + res.chars + " chars";
+    $("ollReply").textContent = res.reply || "(the model returned an empty reply)";
+  } catch (e) {
+    $("ollReplyMeta").textContent = "";
+    $("ollReply").textContent = "(error) " + e.message;
+  } finally {
+    busy(btn, false);
+  }
+}
+
+$("ollDetect").addEventListener("click", detectModels);
+$("ollSend").addEventListener("click", () => sendToModel());
+$("ollTest").addEventListener("click", () => sendToModel("Reply with exactly the single word: pong. No punctuation, no extra text."));
+
+$("ollReview").addEventListener("click", async () => {
+  const btn = $("ollReview"); busy(btn, true);
+  try {
+    handle(await api("/api/audit", {
+      path: $("ollPath").value,
+      max_files: 500,
+      llm: true,
+      ...ollamaPayload(),
+    }));
+  } catch (e) { toast("request failed: " + e.message); }
+  finally { busy(btn, false); }
+});
+
+$("ollProbe").addEventListener("click", async () => {
+  const btn = $("ollProbe"); busy(btn, true);
+  try {
+    handle(await api("/api/probe", {
+      target: "model",
+      ...ollamaPayload(),
+      category: $("ollCategory").value,
+      system_prompt: $("ollSysPrompt").value,
+    }));
+  } catch (e) { toast("request failed: " + e.message); }
+  finally { busy(btn, false); }
+});
+
+/* ---------- render ---------- */
+function handle(res) {
+  if (!res.ok) { toast(res.error || "request failed"); renderErrors([res.error || "request failed"]); return; }
+  state.report = res.report; state.markdown = res.markdown || ""; state.text = res.text || "";
+  state.stats = res.stats || null;
+  state.diff = "";
+  state.sevOff = new Set(); state.kindOff = new Set();
+  const staleDiff = $("fixDiff");
+  if (staleDiff) staleDiff.remove();
+  $("results").classList.remove("hidden");
+  render();
+  $("results").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function handleFix(res) {
+  if (!res.ok) { toast(res.error || "request failed"); renderErrors([res.error || "request failed"]); return; }
+  handle(res);
+  state.diff = res.diff || "";
+  if (!state.diff) return;
+  const f = res.fix || {};
+  const card = document.createElement("div");
+  card.id = "fixDiff";
+  card.className = "card";
+  card.innerHTML = `<h3 style="margin:0 0 4px">Automatic patch &mdash; ${esc(f.changed_files ?? "?")} file(s), ${esc(f.changes ?? "?")} changes, findings ${esc(f.before ?? "?")} &rarr; ${esc(f.after ?? "?")} (resolved ${esc(f.resolved ?? "?")})</h3>
+    <div class="meta">${f.applied ? "applied to disk (backups: .vbak)" : "dry run — nothing written"}</div>
+    <pre class="ev" style="max-height:440px;overflow:auto">${esc(state.diff)}</pre>`;
+  $("results").insertBefore(card, $("errors"));
+}
+
+function render() {
+  const r = state.report;
+  if (!r) return;
+  const c = r.summary.findings, k = r.summary.by_kind;
+  const chips = [];
+  chips.push(`<span class="chip" style="cursor:default">worst <b>&nbsp;${esc(r.summary.worst || "none")}</b></span>`);
+  chips.push(`<span class="chip" style="cursor:default">files <b>&nbsp;${r.scanned_files}</b></span>`);
+  if (state.stats) {
+    const parts = [];
+    for (const key of ["manifests", "packages", "checked", "vulnerable_packages", "advisories", "unpinned",
+                       "functions", "longest", "most_complex", "iterations", "crashes", "anomalies",
+                       "changed_files", "changes", "resolved", "mode", "offline"]) {
+      if (state.stats[key] !== undefined && state.stats[key] !== null) parts.push(`${key}=${state.stats[key]}`);
+    }
+    if (parts.length) chips.push(`<span class="chip" style="cursor:default">${parts.join(" &middot; ")}</span>`);
+  }
+  for (const sev of SEW) {
+    chips.push(`<span class="chip ${state.sevOff.has(sev) ? "off" : ""}" data-sev="${sev}">` +
+      `<span class="dot s-${sev}"></span>${sev}<span class="n">${c[sev] || 0}</span></span>`);
+  }
+  if (r.probes && r.probes.length) {
+    const p = r.summary.probes;
+    chips.push(`<span class="chip" style="cursor:default">probes <b>&nbsp;${p.vulnerable} vuln</b> / ${p.safe} safe</span>`);
+  }
+  $("summary").innerHTML = chips.join("");
+
+  const kchips = KINDS.map(kd =>
+    `<span class="chip ${state.kindOff.has(kd) ? "off" : ""}" data-kind="${kd}">` +
+    `<span class="dot k-${kd}"></span>${kd}<span class="n">${k[kd] || 0}</span></span>`).join("");
+  $("kindChips").innerHTML = kchips;
+
+  renderErrors(r.errors || []);
+  renderFindings();
+  renderProbes(r.probes || []);
+}
+
+function visibleFindings() {
+  const r = state.report; if (!r) return [];
+  const q = state.q.toLowerCase();
+  return (r.findings || []).filter(f => {
+    if (state.sevOff.has(f.severity)) return false;
+    if (state.kindOff.has(f.kind)) return false;
+    if (q && !((f.title + " " + f.source + " " + f.evidence + " " + f.rule_id).toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function renderFindings() {
+  const r = state.report;
+  if (!r) return;
+  const list = visibleFindings();
+  const total = (r.findings || []).length;
+  if (!total) { $("findings").innerHTML = `<div class="card"><div class="empty">No code findings. (That is a result, not a guarantee.)</div></div>`; return; }
+  if (!list.length) { $("findings").innerHTML = `<div class="card"><div class="empty">All ${total} findings are filtered out.</div></div>`; return; }
+
+  $("findings").innerHTML = list.map(f => `
+    <div class="finding sev-${esc(f.severity)}">
+      <div class="fhead">
+        <span class="sevtag" style="color:var(--${esc(f.severity)})">${esc(f.severity)}</span>
+        <span class="kindtag k-${esc(f.kind)}">${esc(f.kind)}</span>
+        <span class="title">${esc(f.title)}</span>
+        <span class="where">${esc(f.source)}</span>
+      </div>
+      ${f.cwe || f.confidence ? `<div class="meta">${f.cwe ? esc(f.cwe) + " &middot; " : ""}confidence ${esc(f.confidence)}${f.rule_id ? " &middot; " + esc(f.rule_id) : ""}</div>` : ""}
+      ${f.evidence ? `<code class="ev">${esc(f.evidence)}</code>` : ""}
+      ${f.description ? `<p class="why">${esc(f.description)}</p>` : ""}
+      ${f.remediation ? `<p class="fix"><b>Fix:</b> ${esc(f.remediation)}</p>` : ""}
+    </div>`).join("");
+  if (list.length !== total) {
+    $("findings").insertAdjacentHTML("beforeend", `<div class="empty">Showing ${list.length} of ${total} findings.</div>`);
+  }
+}
+
+function renderProbes(probes) {
+  if (!probes.length) { $("probesWrap").innerHTML = ""; return; }
+  const rows = probes.map(p => `
+    <tr>
+      <td><span class="verdict v-${esc(p.verdict)}">${esc(p.verdict)}</span></td>
+      <td>${esc(p.name)}<div class="meta">${esc(p.category)}${p.severity ? " &middot; " + esc(p.severity) : ""}</div></td>
+      <td>${esc((p.evidence || p.response || "").slice(0, 220))}</td>
+    </tr>`).join("");
+  $("probesWrap").innerHTML = `
+    <div class="card">
+      <h3 style="margin:0 0 8px">Probes (${probes.length})</h3>
+      <table class="probes">
+        <thead><tr><th>Verdict</th><th>Probe</th><th>Evidence</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderErrors(errors) {
+  if (!errors || !errors.length) { $("errors").classList.add("hidden"); return; }
+  $("errors").className = "errors";
+  $("errors").innerHTML = `<b>Notes / errors</b><ul>${errors.map(e => `<li>${esc(e)}</li>`).join("")}</ul>`;
+}
+
+/* ---------- filters ---------- */
+$("summary").addEventListener("click", (e) => {
+  const chip = e.target.closest("[data-sev]"); if (!chip) return;
+  const sev = chip.dataset.sev;
+  state.sevOff.has(sev) ? state.sevOff.delete(sev) : state.sevOff.add(sev);
+  render();
+});
+$("kindChips").addEventListener("click", (e) => {
+  const chip = e.target.closest("[data-kind]"); if (!chip) return;
+  const kd = chip.dataset.kind;
+  state.kindOff.has(kd) ? state.kindOff.delete(kd) : state.kindOff.add(kd);
+  render();
+});
+$("search").addEventListener("input", (e) => { state.q = e.target.value; renderFindings(); });
+
+/* ---------- exports ---------- */
+function download(name, text, type) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+$("dlJson").addEventListener("click", () => {
+  if (!state.report) return toast("run something first");
+  download("vulnfinder-report.json", JSON.stringify(state.report, null, 2), "application/json");
+});
+$("dlMd").addEventListener("click", () => {
+  if (!state.markdown) return toast("run something first");
+  download("vulnfinder-report.md", state.markdown, "text/markdown");
+});
+$("copyText").addEventListener("click", async () => {
+  if (!state.text) return toast("run something first");
+  try { await navigator.clipboard.writeText(state.text); toast("text report copied"); }
+  catch { toast("clipboard blocked by browser"); }
+});
+
+/* ---------- rules tab ---------- */
+let rulesLoaded = false;
+async function loadRules() {
+  if (rulesLoaded) return;
+  const res = await api("/api/rules");
+  if (!res.ok) { $("rulesTableWrap").innerHTML = `<div class="empty">${esc(res.error || "failed to load rules")}</div>`; return; }
+  state.rules = res.rules || []; rulesLoaded = true;
+  $("ruleKindChips").innerHTML = KINDS.map(kd =>
+    `<span class="chip ${state.ruleKindOff.has(kd) ? "off" : ""}" data-rkind="${kd}">` +
+    `<span class="dot k-${kd}"></span>${kd}</span>`).join("");
+  renderRules();
+}
+function renderRules() {
+  const q = $("ruleSearch").value.toLowerCase();
+  const list = state.rules.filter(r => {
+    if (state.ruleKindOff.has(r.kind)) return false;
+    if (q && !((r.id + " " + r.title + " " + r.tags.join(" ") + " " + r.cwe).toLowerCase().includes(q))) return false;
+    return true;
+  });
+  const rows = list.map(r => `
+    <tr>
+      <td><span class="sevtag" style="color:var(--${esc(r.severity)})">${esc(r.severity)}</span></td>
+      <td><span class="kindtag k-${esc(r.kind)}">${esc(r.kind)}</span></td>
+      <td><code>${esc(r.id)}</code></td>
+      <td>${esc(r.title)}<div class="meta">${esc(r.cwe || "")}${r.tags.length ? (r.cwe ? " &middot; " : "") + esc(r.tags.join(", ")) : ""}</div></td>
+      <td class="meta">${r.extensions ? esc(r.extensions.join(", ")) : "any text"}</td>
+    </tr>`).join("");
+  $("rulesTableWrap").innerHTML = `
+    <table class="probes">
+      <thead><tr><th>Severity</th><th>Kind</th><th>Rule</th><th>Title</th><th>Scope</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="empty">${list.length} of ${state.rules.length} rules</div>`;
+}
+$("ruleSearch").addEventListener("input", renderRules);
+$("ruleKindChips").addEventListener("click", (e) => {
+  const chip = e.target.closest("[data-rkind]"); if (!chip) return;
+  const kd = chip.dataset.rkind;
+  state.ruleKindOff.has(kd) ? state.ruleKindOff.delete(kd) : state.ruleKindOff.add(kd);
+  chip.classList.toggle("off");
+  renderRules();
+});
+
+/* ---------- bounties tab ---------- */
+let bountiesLoaded = false;
+function money(n) {
+  n = Number(n || 0);
+  if (n >= 1e6) return "$" + (n / 1e6).toFixed(1) + "M";
+  if (n >= 1e3) return "$" + Math.round(n / 1e3) + "K";
+  return "$" + n;
+}
+async function loadBounties(force) {
+  const btn = $("btyLoad"); busy(btn, true);
+  try {
+    const q = new URLSearchParams({
+      search: $("btySearch").value,
+      min_bounty: $("btyMin").value || "0",
+      sort: $("btySort").value,
+      auditable: $("btyAuditable").checked ? "1" : "",
+      top: "50",
+    });
+    if (force) q.set("refresh", "1");
+    const res = await api("/api/bounties?" + q.toString());
+    if (!res.ok) {
+      toast(res.error || "failed to load programs");
+      $("btyListWrap").innerHTML = `<div class="empty">${esc(res.error || "failed")}</div>`;
+      return;
+    }
+    state.bounties = res.programs || []; bountiesLoaded = true;
+    renderBountyList(res);
+  } catch (e) { toast("request failed: " + e.message); }
+  finally { busy(btn, false); }
+}
+function renderBountyList(res) {
+  const rows = (res.programs || []).map(p => `
+    <tr class="btyRow" data-slug="${esc(p.slug)}">
+      <td>${esc(money(p.max_bounty))}</td>
+      <td><b>${esc(p.project)}</b><div class="meta">${esc(p.slug)}</div></td>
+      <td>${esc((p.program_types || []).join(", ") || (p.product_types || []).join(", "))}</td>
+      <td class="meta">${p.auditable ? "&#10003; " + p.repos.length + " repo(s)" : "&mdash;"}</td>
+    </tr>`).join("");
+  $("btyListWrap").innerHTML = `
+    <table class="probes">
+      <thead><tr><th>Bounty</th><th>Project</th><th>Kind</th><th>Source</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="empty">${res.count} of ${res.total} programs shown &middot; click a row for its scope.</div>`;
+  $("btyListWrap").querySelectorAll(".btyRow").forEach(tr =>
+    tr.addEventListener("click", () => showBounty(tr.dataset.slug)));
+}
+async function showBounty(slug) {
+  state.bountySlug = slug;
+  $("btyDetail").innerHTML = `<div class="card"><div class="empty">Loading ${esc(slug)}&hellip;</div></div>`;
+  const res = await api("/api/bounty?slug=" + encodeURIComponent(slug));
+  if (!res.ok) { $("btyDetail").innerHTML = `<div class="card"><div class="empty">${esc(res.error || "failed")}</div></div>`; return; }
+  const p = res.program;
+  const repos = (p.repos || []).map(r =>
+    `<li><code>${esc(r.repo)}</code>${r.ref ? " @ " + esc(r.ref) : ""}</li>`).join("");
+  $("btyDetail").innerHTML = `
+    <div class="card">
+      <div class="fhead">
+        <span class="title" style="font-size:15px">${esc(p.project)}</span>
+        <span class="badge">${esc(money(p.max_bounty))}</span>
+        <a class="where" href="${esc(p.url)}" target="_blank" rel="noopener">program page &#8599;</a>
+      </div>
+      <div class="meta">${esc((p.ecosystems || []).join(", "))}</div>
+      ${repos
+        ? `<p style="margin:10px 0 4px"><b>Auditable repos</b></p><ul>${repos}</ul>`
+        : `<p class="meta">No auditable GitHub source linked; scope is on-chain or web only.</p>`}
+      <pre class="ev" style="max-height:320px;overflow:auto">${esc(res.text || "")}</pre>
+      <div class="row" style="margin-top:12px">
+        <div class="grow">
+          <label for="btyOut">Workspace folder</label>
+          <input type="text" id="btyOut" value="bounties" spellcheck="false" />
+        </div>
+        <label class="check" style="margin-bottom:9px"><input type="checkbox" id="btyClone" checked /> clone source</label>
+        <button class="primary" id="btySetup">Prepare workspace + audit</button>
+      </div>
+      <div class="hint">Writes SCOPE.md and downloads the in-scope code to scan. Only scan what the program lists as in scope.</div>
+    </div>`;
+  $("btySetup").addEventListener("click", () => runBountySetup(slug));
+}
+async function runBountySetup(slug) {
+  const btn = $("btySetup"); busy(btn, true);
+  try {
+    const res = await api("/api/bounty/setup", {
+      slug,
+      out: $("btyOut").value || "bounties",
+      clone: $("btyClone").checked,
+      audit: true,
+      max_repos: 5,
+    });
+    if (!res.ok) { toast(res.error || "setup failed"); return; }
+    const s = res.setup || {};
+    const cloned = (s.cloned || []).map(c => `<li><code>${esc(c.path)}</code>${c.cached ? " (cached)" : ""}</li>`).join("");
+    const errs = (s.clone_errors || []).map(e => `<li>${esc(e.repo)} &mdash; ${esc(e.error)}</li>`).join("");
+    $("btyDetail").insertAdjacentHTML("afterbegin",
+      `<div class="card"><b>Workspace ready</b>
+        <div class="meta">${esc(s.root || "")}</div>
+        <div class="meta">scope: ${esc(s.scope || "")}</div>
+        ${cloned ? `<ul>${cloned}</ul>` : ""}
+        ${errs ? `<p class="meta">Clone issues:</p><ul>${errs}</ul>` : ""}</div>`);
+    if (res.report) handle(res);
+    else toast("workspace written (nothing cloned to audit)");
+  } catch (e) { toast("request failed: " + e.message); }
+  finally { busy(btn, false); }
+}
+$("btyLoad").addEventListener("click", () => loadBounties(true));
+$("btySearch").addEventListener("keydown", (e) => { if (e.key === "Enter") loadBounties(false); });
+
+/* ---------- folder picker ---------- */
+function openBrowser(startPath) {
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="box">
+      <header><h1 style="font-size:14px">Choose a folder</h1></header>
+      <div class="body">
+        <div class="crumbs" id="pkPath"></div>
+        <div style="margin:10px 0"><input type="text" id="pkInput" spellcheck="false" /></div>
+        <div id="pkList"></div>
+      </div>
+      <footer>
+        <button class="ghost" id="pkCancel">Cancel</button>
+        <button class="primary" id="pkUse">Use this folder</button>
+      </footer>
+    </div>`;
+  document.body.appendChild(modal);
+  const close = () => modal.remove();
+  let current = "";
+
+  async function go(path) {
+    const res = await api("/api/browse?path=" + encodeURIComponent(path));
+    if (!res.ok) { toast(res.error || "cannot open folder"); return; }
+    current = res.path;
+    $("pkPath").textContent = current;
+    $("pkInput").value = current;
+    const items = [];
+    if (res.parent) items.push(`<span class="dirlink" data-go="${esc(res.parent)}">📁 ..</span>`);
+    for (const d of res.dirs) items.push(`<span class="dirlink" data-go="${esc(current.replace(/[\\/]$/, "") + "/" + d)}">📁 ${esc(d)}</span>`);
+    if (!res.dirs.length) items.push(`<div class="meta" style="padding:6px 9px">(no subfolders &middot; ${res.files} files here)</div>`);
+    $("pkList").innerHTML = items.join("");
+    $("pkList").querySelectorAll("[data-go]").forEach(el =>
+      el.addEventListener("click", () => go(el.dataset.go)));
+  }
+
+  $("pkCancel").addEventListener("click", close);
+  $("pkUse").addEventListener("click", () => {
+    $("auditPath").value = current; $("allPath").value = current;
+    $("depsPath").value = current; $("qualityPath").value = current; $("fixPath").value = current;
+    if ($("runPath")) $("runPath").value = current;
+    close();
+  });
+  $("pkInput").addEventListener("keydown", (e) => { if (e.key === "Enter") go(e.target.value); });
+  modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+  go(startPath || $("auditPath").value || ".");
+}
+/* ---------- bounty runner (agents) ---------- */
+function runParams() {
+  return {
+    path: $("runPath").value.trim(),
+    slug: $("runSlug").value.trim(),
+    src: $("runSrc").value.trim(),
+    out: $("runOut").value.trim() || "bounties",
+    clone: $("runClone").checked,
+    online: $("runOnline").checked,
+  };
+}
+
+async function runBountyAgents() {
+  const p = runParams();
+  if (!p.path && !p.slug) { toast("give a workspace folder or an Immunefi slug"); return; }
+  const btn = $("runGo"); busy(btn, true);
+  $("runGateWrap").innerHTML = `<div class="empty">Running the agent pipeline&hellip; static analysis over the source can take a few seconds.</div>`;
+  try {
+    const res = await api("/api/agents/run", p);
+    if (!res.ok) {
+      $("runGateWrap").innerHTML = `<div class="empty">${esc(res.error || "run failed")}</div>`;
+      toast(res.error || "run failed");
+      return;
+    }
+    renderRun(res);
+    loadRuns();
+  } catch (e) { toast("request failed: " + e.message); }
+  finally { busy(btn, false); }
+}
+
+function runStatusColor(s) {
+  if (s === "done") return "var(--safe)";
+  if (s === "failed") return "var(--vuln)";
+  return "var(--muted)";
+}
+
+function renderRun(res) {
+  const g = res.gate || {};
+  const complete = g.status === "complete";
+  const accent = complete ? (g.submission === "candidates" ? "var(--incon)" : "var(--safe)") : "var(--vuln)";
+  const steps = (g.required_human_steps || []).map(s => `<li>${esc(s)}</li>`).join("");
+  const dossier = res.markdown ? `
+    <details style="margin-top:10px">
+      <summary class="meta" style="cursor:pointer">Show dossier (REPORT.md)</summary>
+      <pre class="ev" style="max-height:460px;overflow:auto;margin-top:8px">${esc(res.markdown)}</pre>
+    </details>` : "";
+  $("runGateWrap").innerHTML = `
+    <div style="border-left:4px solid ${accent};padding-left:14px">
+      <div style="font-size:18px;font-weight:700;color:${accent}">${esc(g.label || "?")}${g.blocker ? " &mdash; " + esc(g.blocker) : ""}</div>
+      <div style="margin-top:6px;font-size:14px;font-weight:600">SUBMISSION: ${esc(g.submission_label || "?")}</div>
+      <div class="meta" style="margin-top:6px">
+        ${esc(res.project)} &middot; <code>${esc(res.root)}</code><br>
+        eligible candidates <b>${g.eligible == null ? 0 : g.eligible}</b> &middot;
+        known-issue matches <b>${g.known_issue_matches == null ? 0 : g.known_issue_matches}</b> (ineligible) &middot;
+        worst <b>${esc(g.worst || "none")}</b> &middot;
+        submittable <b>${g.submittable ? "yes" : "no"}</b>
+      </div>
+      <div class="meta" style="margin-top:4px">
+        human triage: <b style="color:var(--safe)">${g.confirmed == null ? 0 : g.confirmed} confirmed</b> &middot;
+        <b style="color:var(--muted)">${g.dismissed == null ? 0 : g.dismissed} dismissed</b> &middot;
+        <b style="color:var(--incon)">${g.undecided == null ? 0 : g.undecided} undecided</b>
+      </div>
+      <div style="margin-top:10px"><b>Required before hand-in</b>
+        <ul class="meta" style="margin:4px 0 0;padding-left:18px">${steps}</ul></div>
+      <p class="meta" style="margin-top:8px">${esc(g.note || "")}</p>
+      ${dossier}
+    </div>`;
+
+  const rows = (res.tasks || []).map(t => `
+    <tr>
+      <td><code>${esc(t.agent)}</code></td>
+      <td>${esc(t.title)}${t.required ? "" : ' <span class="meta">(optional)</span>'}</td>
+      <td style="color:${runStatusColor(t.status)};font-weight:600">${esc(t.status)}</td>
+      <td class="meta">${esc(t.detail || t.error || "")}</td>
+      <td class="meta" style="text-align:right">${t.elapsed_ms} ms</td>
+    </tr>`).join("");
+  $("runBoardWrap").innerHTML = `
+    <h1>Agent task board</h1>
+    <table class="probes"><thead><tr><th>Agent</th><th>Task</th><th>Status</th><th>Detail</th><th style="text-align:right">Time</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+
+  const eligible = (res.candidates || []).filter(c => c.eligible);
+  const known = (res.candidates || []).filter(c => c.known_issue);
+  let html = `<h1>Findings</h1>
+    <p class="meta">${eligible.length} eligible candidate(s) above the severity floor once documented known issues are removed; ${known.length} finding(s) look like known issues.</p>`;
+  if (eligible.length) {
+    html += `<h2 style="font-size:13px">Eligible candidates (need human validation)</h2>` + eligible.map(c => {
+      const f = c.finding;
+      const decColor = c.decision === "confirmed" ? "var(--safe)" : (c.decision === "dismissed" ? "var(--muted)" : "var(--incon)");
+      return `<div class="card" style="margin:8px 0;border-left:3px solid var(--${f.severity})">
+        <div><b style="color:var(--${f.severity})">${esc((f.severity || "").toUpperCase())}</b> ${esc(f.title)}</div>
+        <div class="meta"><code>${esc(f.source)}</code> &middot; ${esc(f.kind)} &middot; confidence ${esc(f.confidence || "?")}${f.cwe ? " &middot; " + esc(f.cwe) : ""}</div>
+        ${f.description ? `<div style="margin-top:6px">${esc(f.description)}</div>` : ""}
+        ${f.evidence ? `<pre class="ev">${esc(f.evidence)}</pre>` : ""}
+        ${f.remediation ? `<div class="meta" style="margin-top:6px">fix: ${esc(f.remediation)}</div>` : ""}
+        <div class="meta" style="margin-top:8px">decision: <b style="color:${decColor}">${esc(c.decision || "undecided")}</b>
+          &middot; <code>${esc(c.key)}</code></div>
+        <div style="margin-top:6px">
+          <button class="ghost" data-decide="confirmed" data-key="${esc(c.key)}">Confirm: real bug</button>
+          <button class="ghost" data-decide="dismissed" data-key="${esc(c.key)}">Dismiss</button>
+          <button class="ghost" data-decide="" data-key="${esc(c.key)}">Clear</button>
+        </div>
+      </div>`;
+    }).join("");
+  } else {
+    html += `<div class="empty">No eligible candidates cleared the floor.</div>`;
+  }
+  if (known.length) {
+    html += `<h2 style="font-size:13px;margin-top:14px">Likely known-issue matches (ineligible)</h2>
+      <table class="probes"><thead><tr><th>Sev</th><th>Finding</th><th>Location</th><th>Matched words</th></tr></thead><tbody>` +
+      known.map(c => `<tr><td>${esc(c.finding.severity)}</td><td>${esc(c.finding.title)}</td><td><code>${esc(c.finding.source)}</code></td><td class="meta">${esc((c.matched || []).join(", "))}</td></tr>`).join("") +
+      `</tbody></table>`;
+  }
+  $("runFindingsWrap").innerHTML = html;
+  $("runFindingsWrap").querySelectorAll("[data-decide]").forEach(el =>
+    el.addEventListener("click", () => decideCandidate(res.root, el.dataset.key, el.dataset.decide)));
+  loadResearch(res.root);
+}
+
+async function decideCandidate(path, key, verdict) {
+  try {
+    const out = await api("/api/agents/decide", { path: path, key: key, verdict: verdict });
+    if (!out.ok) { toast(out.error || "could not record decision"); return; }
+    renderRun(out);
+    loadRuns();
+    toast(verdict ? "decision recorded: " + verdict : "decision cleared");
+  } catch (e) { toast("request failed: " + e.message); }
+}
+
+async function loadResearch(rootPath) {
+  const path = (rootPath || $("runPath").value || "").trim();
+  if (!path) { toast("give a workspace folder"); return; }
+  const btn = $("runResearch"); busy(btn, true);
+  $("runResearchWrap").innerHTML = `<div class="empty">Loading research dossier&hellip;</div>`;
+  try {
+    const res = await api("/api/research?path=" + encodeURIComponent(path));
+    if (!res.ok) {
+      $("runResearchWrap").innerHTML = `<div class="empty">${esc(res.error || "no research dossier for this workspace")}</div>`;
+      return;
+    }
+    renderResearch(res);
+  } catch (e) { toast("request failed: " + e.message); }
+  finally { busy(btn, false); }
+}
+
+function renderResearch(res) {
+  const v = res.verdict || {};
+  const accent = v.novel_findings ? "var(--incon)" : "var(--safe)";
+  const areaRows = (res.areas || []).map(a => `<tr>
+      <td><b>${esc(a.title)}</b><div class="meta"><code>${esc(a.agent || "")}</code></div></td>
+      <td style="text-align:center">${a.novel == null ? 0 : a.novel}</td>
+      <td class="meta">${esc(a.conclusion || "")}</td>
+    </tr>`).join("");
+  const exRows = (res.excluded || []).map(e => `<tr>
+      <td>${esc(e.candidate)}</td><td class="meta">${esc(e.reason)}</td></tr>`).join("");
+  const docs = (res.documents || []).map(d => d.exists ? `
+      <details style="margin:8px 0">
+        <summary style="cursor:pointer"><b>${esc(d.title)}</b> <span class="meta">&middot; <code>${esc(d.path)}</code> &middot; ${d.bytes == null ? 0 : d.bytes} bytes</span></summary>
+        <pre class="ev" style="max-height:420px;overflow:auto;margin-top:8px">${esc(d.markdown || "")}</pre>
+      </details>` : `<div class="meta">missing report: <code>${esc(d.path)}</code></div>`).join("");
+  $("runResearchWrap").innerHTML = `
+    <h1>Manual research dossier</h1>
+    <div style="border-left:4px solid ${accent};padding-left:14px">
+      <div style="font-size:16px;font-weight:700;color:${accent}">${esc(v.status || "?")}${v.submission ? " &mdash; " + esc(v.submission) : ""}</div>
+      <div class="meta" style="margin-top:6px">
+        ${esc(res.project || "")} &middot; <code>${esc(res.root || "")}</code><br>
+        areas reviewed <b>${v.areas_reviewed == null ? 0 : v.areas_reviewed}</b> &middot;
+        novel findings <b>${v.novel_findings == null ? 0 : v.novel_findings}</b> &middot;
+        candidates examined <b>${v.candidates_examined == null ? 0 : v.candidates_examined}</b> &middot;
+        submittable <b>${v.submittable ? "yes" : "no"}</b>
+      </div>
+      ${res.program_url ? `<div class="meta" style="margin-top:4px">program: <a href="${esc(res.program_url)}" target="_blank" rel="noopener">${esc(res.program_url)}</a></div>` : ""}
+      <p class="meta" style="margin-top:8px">${esc(v.note || "")}</p>
+    </div>
+    <h2 style="font-size:13px;margin-top:14px">Subsystem outcomes</h2>
+    <table class="probes"><thead><tr><th>Area</th><th style="text-align:center">Novel</th><th>Conclusion</th></tr></thead><tbody>${areaRows}</tbody></table>
+    <h2 style="font-size:13px;margin-top:14px">Candidates examined &amp; excluded</h2>
+    <table class="probes"><thead><tr><th>Candidate</th><th>Why excluded</th></tr></thead><tbody>${exRows}</tbody></table>
+    <h2 style="font-size:13px;margin-top:14px">Reports</h2>
+    ${docs}`;
+}
+
+async function loadRuns() {
+  try {
+    const res = await api("/api/agents/list?out=" + encodeURIComponent($("runOut").value.trim() || "bounties"));
+    state.runsLoaded = true;
+    const ws = res.workspaces || [];
+    if (!ws.length) {
+      $("runListWrap").innerHTML = `<div class="empty">No saved workspaces under <code>${esc(res.out || "")}</code> yet.</div>`;
+      return;
+    }
+    const rows = ws.map(w => {
+      const g = w.gate || {};
+      const color = g.status === "complete" ? "var(--safe)" : "var(--vuln)";
+      return `<tr>
+        <td><b>${esc(w.project)}</b><div class="meta">${esc(w.slug)}</div></td>
+        <td style="color:${color};font-weight:600">${esc(g.label || "?")}<div class="meta" style="color:var(--muted)">${esc(g.submission_label || "")}</div></td>
+        <td class="meta">${g.eligible == null ? 0 : g.eligible} eligible &middot; ${g.known_issue_matches == null ? 0 : g.known_issue_matches} known</td>
+        <td><button class="ghost" data-run="${esc(w.path)}">Re-run</button></td>
+      </tr>`;
+    }).join("");
+    $("runListWrap").innerHTML = `<h1>Saved workspaces</h1>
+      <table class="probes"><thead><tr><th>Program</th><th>Verdict</th><th>Candidates</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    $("runListWrap").querySelectorAll("[data-run]").forEach(el =>
+      el.addEventListener("click", () => {
+        $("runPath").value = el.dataset.run;
+        $("runSlug").value = "";
+        runBountyAgents();
+      }));
+  } catch (e) { toast("could not list workspaces: " + e.message); }
+}
+
+$("runGo").addEventListener("click", runBountyAgents);
+$("runPick").addEventListener("click", () => openBrowser($("runPath").value));
+$("runResearch").addEventListener("click", () => loadResearch());
+
+$("browseBtn").addEventListener("click", () => openBrowser($("auditPath").value));
+$("depsBrowse").addEventListener("click", () => openBrowser($("depsPath").value));
+
+/* ---------- external scanners ---------- */
+const SCAN_SEV = { high: "high", medium: "medium", low: "low", informational: "info", info: "info" };
+
+async function loadScanners() {
+  try {
+    const res = await api("/api/scanners");
+    state.scannersLoaded = true;
+    renderScanners(res.scanners || []);
+  } catch (e) {
+    $("scanTableWrap").innerHTML = `<div class="empty">could not load the registry: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderScanners(list) {
+  const avail = list.filter(s => s.available).length;
+  const rows = list.map(s => {
+    let label = "not installed", color = "var(--muted)";
+    if (s.available) { label = "runnable"; color = "var(--safe)"; }
+    else if (s.state === "saas") { label = "hosted / needs token"; color = "var(--incon)"; }
+    else if (s.state === "blocked") { label = "cannot run here"; color = "var(--incon)"; }
+    else if (s.state === "unverified") { label = "no such tool found"; color = "var(--vuln)"; }
+    const run = s.available ? `<button class="ghost" data-scan="${esc(s.id)}">Run</button>` : "";
+    return `<tr>
+      <td><b>${esc(s.name)}</b><div class="meta"><code>${esc(s.id)}</code> &middot; ${esc(s.kind)}</div></td>
+      <td style="color:${color};font-weight:700;white-space:nowrap">${esc(label)}</td>
+      <td class="meta">${esc(s.available ? (s.notes || "") : (s.reason || s.notes || ""))}</td>
+      <td>${s.upstream ? `<a href="${esc(s.upstream)}" target="_blank" rel="noopener">upstream</a>` : `<span class="meta">&ndash;</span>`}</td>
+      <td style="text-align:right">${run}</td>
+    </tr>`;
+  }).join("");
+  $("scanTableWrap").innerHTML = `
+    <h1>Scanner registry</h1>
+    <p class="meta">${avail} of ${list.length} can run on this machine right now. Availability is probed live, not assumed.</p>
+    <table class="probes"><thead><tr><th>Tool</th><th>Status</th><th>Notes</th><th>Source</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  $("scanTableWrap").querySelectorAll("[data-scan]").forEach(el =>
+    el.addEventListener("click", () => runScanners(el.dataset.scan)));
+}
+
+async function runScanners(tool) {
+  const path = $("scanPath").value.trim();
+  if (!path) { toast("give a source tree path"); return; }
+  const btn = $("scanAll");
+  busy(btn, true);
+  $("scanResultWrap").innerHTML = `<div class="empty">Running ${esc(tool || "every installed scanner")} over <code>${esc(path)}</code>&hellip; a cold Slither compile can take a minute.</div>`;
+  try {
+    const res = await api("/api/scan", { path, tool: tool || "", timeout: Number($("scanTimeout").value || 900) });
+    renderScans(res);
+    loadScanners();
+  } catch (e) { toast("scan failed: " + e.message); }
+  finally { busy(btn, false); }
+}
+
+function renderScans(res) {
+  if (res.path) $("scanPath").value = res.path;
+  const blocks = (res.results || []).map(r => {
+    const name = r.name || r.tool || "?";
+    if (!r.ok) {
+      return `<h2 style="font-size:13px;margin-top:16px">${esc(name)}</h2>
+        <div class="empty">did not run: ${esc(r.error || "unknown error")}</div>`;
+    }
+    const hits = r.findings || [];
+    const by = {};
+    hits.forEach(f => { const k = f.impact || "?"; by[k] = (by[k] || 0) + 1; });
+    const summary = Object.keys(by).map(k => `${by[k]} ${k}`).join(" &middot; ") || "no output";
+    const rows = hits.map(f => {
+      const varName = SCAN_SEV[String(f.impact || "").toLowerCase()] || "muted";
+      return `<tr>
+        <td style="color:var(--${varName});font-weight:700;white-space:nowrap">${esc(f.impact || "?")}</td>
+        <td><code>${esc(f.check || "")}</code></td>
+        <td class="meta"><code>${esc(f.file || "")}${f.line ? ":" + f.line : ""}</code></td>
+        <td class="meta">${esc(f.description || "")}</td>
+      </tr>`;
+    }).join("");
+    return `<h2 style="font-size:13px;margin-top:16px">${esc(name)} &mdash; ${hits.length} raw hit(s)</h2>
+      <div class="meta">${summary}${r.target ? " &middot; " + esc(r.target) : ""}</div>
+      ${hits.length
+        ? `<table class="probes" style="margin-top:8px"><thead><tr><th>Impact</th><th>Detector</th><th>Location</th><th>Description</th></tr></thead><tbody>${rows}</tbody></table>`
+        : `<div class="empty" style="margin-top:8px">No detector output. That is not proof of safety &mdash; check the tool log for a compile error.</div>`}`;
+  }).join("");
+  $("scanResultWrap").innerHTML = `
+    <h1>Scan results</h1>
+    <div class="meta">${(res.ran || []).length} tool(s) ran &middot; ${res.total_hits || 0} raw detector hit(s)${res.path ? " &middot; <code>" + esc(res.path) + "</code>" : ""}</div>
+    <p class="meta" style="margin-top:6px">${esc(res.note || "")}</p>
+    ${blocks}`;
+}
+
+$("scanRegistry").addEventListener("click", loadScanners);
+$("scanAll").addEventListener("click", () => runScanners(""));
+</script>
+</body>
+</html>
